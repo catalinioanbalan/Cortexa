@@ -1,0 +1,8 @@
+fastapi==0.115.5
+uvicorn==0.32.1
+python-multipart==0.0.18
+pdfplumber==0.11.4
+chromadb==0.5.23
+openai==1.57.2
+langchain-text-splitters==0.3.2
+python-dotenv==1.0.1
