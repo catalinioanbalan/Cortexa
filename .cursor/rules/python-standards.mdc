@@ -1,0 +1,55 @@
+---
+description: Python coding standards for Cortexa
+globs: "**/*.py"
+alwaysApply: false
+---
+
+# Python Standards
+
+## Typing
+
+```python
+# ✅ Always type hints
+async def interpret(self, content: str, context: dict[str, Any] | None = None) -> InterpretationResult:
+
+# ❌ No untyped functions
+def interpret(self, content, context=None):
+```
+
+## Async
+
+```python
+# ✅ Async for I/O operations
+async def fetch_embedding(self, text: str) -> list[float]:
+    return await self.client.embeddings.create(...)
+
+# ❌ No sync calls in async context
+def fetch_embedding(self, text: str) -> list[float]:
+    return self.client.embeddings.create(...)
+```
+
+## Error Handling
+
+```python
+# ✅ Specific exceptions with context
+try:
+    result = await self.openai.chat.completions.create(...)
+except openai.APIError as e:
+    logger.error("OpenAI API failed", exc_info=e)
+    raise InterpretationError(f"Failed to interpret: {e}") from e
+```
+
+## Imports
+
+```python
+# stdlib
+import logging
+from pathlib import Path
+
+# third-party
+from fastapi import APIRouter
+from pydantic import BaseModel
+
+# local
+from services.embedding_service import embedding_service
+```

@@ -1,0 +1,35 @@
+---
+description: Core architecture patterns for Cortexa interpretation engine
+alwaysApply: true
+---
+
+# Cortexa Architecture
+
+## Phase 1 Features
+
+1. **Document RAG**: Upload txt/pdf/md → chunk → embed → store → query
+2. **Input Interpreter**: User text → prompt template → AI → interpretation
+
+## Structure
+
+```
+├── main.py              # FastAPI endpoints
+├── config.py            # Settings, env vars
+├── services/
+│   ├── document_service.py    # Handles txt, pdf, md extraction
+│   ├── embedding_service.py   # OpenAI embeddings
+│   ├── vector_store_service.py # ChromaDB operations
+│   ├── rag_service.py         # Document Q&A
+│   └── interpreter_service.py # User input interpretation
+```
+
+## Principles
+
+1. **Thin endpoints**: Route handlers delegate to services
+2. **Single responsibility**: One service per domain
+3. **Singleton services**: Export instance at module level
+4. **Pydantic models**: All request/response schemas
+
+## Tech Stack
+
+- FastAPI 0.128+, OpenAI SDK 2.16+, ChromaDB 1.4+, Pydantic v2

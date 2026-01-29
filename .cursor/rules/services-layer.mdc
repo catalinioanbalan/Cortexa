@@ -1,0 +1,51 @@
+---
+description: Service layer patterns for Cortexa
+globs: "**/services/**/*.py"
+alwaysApply: false
+---
+
+# Service Layer Patterns
+
+## Existing Services (extend, don't replace)
+
+- `pdf_service.py` → rename to `document_service.py`, add txt/md support
+- `embedding_service.py` → keep as-is
+- `vector_store_service.py` → keep as-is
+- `rag_service.py` → keep as-is
+
+## New Service: Interpreter
+
+```python
+class InterpreterService:
+    def __init__(self):
+        self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        self.model = settings.CHAT_MODEL
+
+    def interpret(
+        self,
+        user_input: str,
+        tone: str = "insightful",
+        style: str = "concise",
+        context: str | None = None
+    ) -> dict:
+        prompt = self._build_prompt(user_input, tone, style, context)
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": self._get_system_prompt(tone, style)},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7
+        )
+        return {"interpretation": response.choices[0].message.content}
+
+interpreter_service = InterpreterService()
+```
+
+## Service Composition
+
+```python
+# Services import other services directly
+from services.embedding_service import embedding_service
+from services.vector_store_service import vector_store_service
+```

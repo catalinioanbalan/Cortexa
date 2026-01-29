@@ -1,13 +1,18 @@
+from pathlib import Path
+
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from pydantic import BaseModel
 from typing import List
 
-from services.pdf_service import pdf_service
+from services.document_service import document_service
 from services.embedding_service import embedding_service
 from services.vector_store_service import vector_store_service
 from services.rag_service import rag_service
+from services.interpreter_service import interpreter_service
 
-app = FastAPI(title="PDF RAG Service", version="1.0.0")
+app = FastAPI(title="Cortexa - Document Interpretation", version="1.0.0")
+
+ALLOWED_EXTENSIONS = {'.pdf', '.txt', '.md'}
 
 
 class UploadResponse(BaseModel):
@@ -26,49 +31,48 @@ class AskResponse(BaseModel):
     source_pages: List[int]
 
 
+class InterpretRequest(BaseModel):
+    input: str
+    tone: str = "insightful"  # insightful, supportive, analytical, creative, direct
+    style: str = "concise"    # concise, detailed, bullet_points, narrative
+    context: str | None = None
+
+
+class InterpretResponse(BaseModel):
+    interpretation: str
+    tone: str
+    style: str
+
+
 @app.post("/upload", response_model=UploadResponse)
-async def upload_pdf(file: UploadFile = File(...)):
+async def upload_document(file: UploadFile = File(...)):
     """
-    Upload a PDF file, extract text, chunk it, generate embeddings, and store in ChromaDB.
-    
-    Args:
-        file: The PDF file to upload
-        
-    Returns:
-        UploadResponse with doc_id, filename, and number of chunks created
+    Upload a document (pdf, txt, md), extract text, chunk it, generate embeddings, and store in ChromaDB.
     """
-    # Validate file type
-    if not file.filename.endswith('.pdf'):
-        raise HTTPException(status_code=400, detail="Only PDF files are accepted")
-    
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Supported formats: {', '.join(ALLOWED_EXTENSIONS)}")
+
     try:
-        # Read file content
         file_content = await file.read()
-        
-        # Save PDF locally
-        doc_id, file_path = pdf_service.save_pdf(file_content, file.filename)
-        
-        # Extract and chunk text
-        chunks = pdf_service.extract_and_chunk_text(file_path)
-        
+        doc_id, file_path = document_service.save_document(file_content, file.filename)
+        chunks = document_service.extract_and_chunk_text(file_path)
+
         if not chunks:
-            raise HTTPException(status_code=400, detail="No text could be extracted from the PDF")
-        
-        # Generate embeddings for all chunks
+            raise HTTPException(status_code=400, detail="No text could be extracted from the document")
+
         chunk_texts = [chunk["text"] for chunk in chunks]
         embeddings = embedding_service.generate_embeddings(chunk_texts)
-        
-        # Store in ChromaDB
         vector_store_service.add_chunks(doc_id, chunks, embeddings)
-        
+
         return UploadResponse(
             doc_id=doc_id,
             filename=file.filename,
             chunks_created=len(chunks)
         )
-        
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing PDF: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing document: {str(e)}")
 
 
 @app.post("/ask", response_model=AskResponse)
@@ -92,6 +96,22 @@ async def ask_question(request: AskRequest):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error answering question: {str(e)}")
+
+
+@app.post("/interpret", response_model=InterpretResponse)
+async def interpret_input(request: InterpretRequest):
+    """Interpret user input with specified tone and style."""
+    try:
+        result = interpreter_service.interpret(
+            user_input=request.input,
+            tone=request.tone,
+            style=request.style,
+            context=request.context
+        )
+        return InterpretResponse(**result)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error interpreting input: {str(e)}")
 
 
 @app.get("/health")

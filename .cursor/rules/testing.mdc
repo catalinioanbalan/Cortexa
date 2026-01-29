@@ -1,0 +1,49 @@
+---
+description: Testing patterns for Cortexa
+globs: "**/tests/**/*.py,**/test_*.py"
+alwaysApply: false
+---
+
+# Testing Patterns
+
+## Test Structure
+
+```
+tests/
+├── conftest.py          # Fixtures
+├── test_interpreters/   # Interpreter tests
+├── test_services/       # Service tests
+└── test_api/            # Endpoint tests
+```
+
+## Async Tests
+
+```python
+import pytest
+from httpx import AsyncClient, ASGITransport
+from main import app
+
+@pytest.fixture
+async def client():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        yield c
+
+@pytest.mark.asyncio
+async def test_interpret_document(client):
+    response = await client.post("/interpret/document", json={"content": "..."})
+    assert response.status_code == 200
+```
+
+## Mocking OpenAI
+
+```python
+from unittest.mock import AsyncMock
+
+@pytest.fixture
+def mock_openai(mocker):
+    mock = AsyncMock()
+    mock.chat.completions.create.return_value = MockResponse(...)
+    mocker.patch("services.openai_service.client", mock)
+    return mock
+```

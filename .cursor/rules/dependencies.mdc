@@ -1,0 +1,35 @@
+---
+description: Dependency management for Cortexa
+globs: "**/requirements.txt,**/pyproject.toml"
+alwaysApply: false
+---
+
+# Dependencies
+
+## Core Stack
+
+| Package | Purpose | Min Version |
+|---------|---------|-------------|
+| fastapi | Web framework | 0.128.0 |
+| openai | AI API client | 2.16.0 |
+| chromadb | Vector database | 1.4.1 |
+| pydantic | Data validation | 2.10.0 |
+| pdfplumber | PDF extraction | 0.11.4 |
+| pillow | Image processing | 11.0.0 |
+
+## Adding Dependencies
+
+```bash
+# Use >= for flexibility
+pip install "package>=version"
+
+# Pin exact versions only for production
+pip freeze > requirements.lock
+```
+
+## Async Requirements
+
+Always use async-compatible libraries:
+- `httpx` instead of `requests`
+- `aiofiles` for file I/O
+- `AsyncOpenAI` client

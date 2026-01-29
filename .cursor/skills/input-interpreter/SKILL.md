@@ -1,0 +1,114 @@
+---
+name: input-interpreter
+description: User input interpretation service with configurable tone, style, and prompts. Use when implementing the interpretation endpoint, building prompt templates, or customizing AI response behavior.
+---
+
+# Input Interpreter
+
+## Overview
+
+Takes user input → applies prompt template (tone, style, context) → sends to AI → returns interpretation.
+
+## Service Implementation
+
+Create `services/interpreter_service.py`:
+
+```python
+from openai import OpenAI
+from config import settings
+
+class InterpreterService:
+    TONES = {
+        "insightful": "Provide deep, thoughtful analysis",
+        "supportive": "Be warm, encouraging, and validating",
+        "analytical": "Be logical, structured, and objective",
+        "creative": "Be imaginative and explore possibilities",
+        "direct": "Be concise and straightforward"
+    }
+    
+    STYLES = {
+        "concise": "Keep responses brief and focused",
+        "detailed": "Provide thorough explanations",
+        "bullet_points": "Use bullet points for clarity",
+        "narrative": "Use flowing, narrative prose"
+    }
+
+    def __init__(self):
+        self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        self.model = settings.CHAT_MODEL
+
+    def interpret(
+        self,
+        user_input: str,
+        tone: str = "insightful",
+        style: str = "concise",
+        context: str | None = None
+    ) -> dict:
+        system_prompt = self._build_system_prompt(tone, style)
+        user_prompt = self._build_user_prompt(user_input, context)
+        
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.7
+        )
+        
+        return {
+            "interpretation": response.choices[0].message.content,
+            "tone": tone,
+            "style": style
+        }
+
+    def _build_system_prompt(self, tone: str, style: str) -> str:
+        tone_instruction = self.TONES.get(tone, self.TONES["insightful"])
+        style_instruction = self.STYLES.get(style, self.STYLES["concise"])
+        
+        return f"""You are an interpreter that helps users understand and explore their thoughts.
+
+Tone: {tone_instruction}
+Style: {style_instruction}
+
+Provide meaningful interpretation that helps the user gain clarity and insight."""
+
+    def _build_user_prompt(self, user_input: str, context: str | None) -> str:
+        if context:
+            return f"Context: {context}\n\nInterpret this: {user_input}"
+        return f"Interpret this: {user_input}"
+
+interpreter_service = InterpreterService()
+```
+
+## Endpoint
+
+Add to `main.py`:
+
+```python
+class InterpretRequest(BaseModel):
+    input: str
+    tone: str = "insightful"  # insightful, supportive, analytical, creative, direct
+    style: str = "concise"    # concise, detailed, bullet_points, narrative
+    context: str | None = None
+
+class InterpretResponse(BaseModel):
+    interpretation: str
+    tone: str
+    style: str
+
+@app.post("/interpret", response_model=InterpretResponse)
+async def interpret_input(request: InterpretRequest):
+    result = interpreter_service.interpret(
+        user_input=request.input,
+        tone=request.tone,
+        style=request.style,
+        context=request.context
+    )
+    return InterpretResponse(**result)
+```
+
+## Available Options
+
+**Tones**: insightful, supportive, analytical, creative, direct
+**Styles**: concise, detailed, bullet_points, narrative

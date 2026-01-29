@@ -1,6 +1,5 @@
 from typing import List, Dict
 import chromadb
-from chromadb.config import Settings as ChromaSettings
 
 from config import settings
 
@@ -8,8 +7,7 @@ from config import settings
 class VectorStoreService:
     def __init__(self):
         self.client = chromadb.PersistentClient(
-            path=settings.CHROMA_PERSIST_DIR,
-            settings=ChromaSettings(anonymized_telemetry=False)
+            path=settings.CHROMA_PERSIST_DIR
         )
         self.collection = self.client.get_or_create_collection(
             name=settings.COLLECTION_NAME,

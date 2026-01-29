@@ -1,0 +1,65 @@
+---
+description: FastAPI endpoint patterns for Cortexa
+globs: "**/main.py"
+alwaysApply: false
+---
+
+# FastAPI Patterns
+
+## Phase 1 Endpoints
+
+```python
+# Document upload (txt, pdf, md)
+@app.post("/upload", response_model=UploadResponse)
+async def upload_document(file: UploadFile = File(...)):
+    ext = Path(file.filename).suffix.lower()
+    if ext not in {'.pdf', '.txt', '.md'}:
+        raise HTTPException(400, "Supported: pdf, txt, md")
+    ...
+
+# Document Q&A
+@app.post("/ask", response_model=AskResponse)
+async def ask_question(request: AskRequest):
+    result = rag_service.answer_question(request.question, request.doc_id)
+    ...
+
+# Input interpretation
+@app.post("/interpret", response_model=InterpretResponse)
+async def interpret_input(request: InterpretRequest):
+    result = interpreter_service.interpret(
+        request.input, request.tone, request.style, request.context
+    )
+    ...
+```
+
+## Request/Response Models
+
+```python
+# Upload
+class UploadResponse(BaseModel):
+    doc_id: str
+    filename: str
+    chunks_created: int
+
+# Ask
+class AskRequest(BaseModel):
+    question: str
+    doc_id: str
+
+class AskResponse(BaseModel):
+    answer: str
+    source_pages: list[int]
+
+# Interpret
+class InterpretRequest(BaseModel):
+    input: str
+    tone: str = "insightful"
+    style: str = "concise"
+    context: str | None = None
+
+class InterpretResponse(BaseModel):
+    interpretation: str
+    tone: str
+    style: str
+```
+```
