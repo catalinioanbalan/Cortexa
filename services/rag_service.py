@@ -46,7 +46,7 @@ class RAGService:
         results = vector_store_service.query_by_doc_id(
             query_embedding=question_embedding,
             doc_id=doc_id,
-            top_k=3
+            top_k=settings.RAG_TOP_K  # Configurable, defaults to 5
         )
         
         if not results["documents"]:
@@ -81,16 +81,18 @@ class RAGService:
 IMPORTANT RULES:
 - Answer ONLY using information from the context below
 - If the context doesn't contain enough information to answer the question, say "The provided document does not contain sufficient information to answer this question."
-- Do NOT use any external knowledge
-- Be concise and accurate
-- Reference page numbers when relevant
+- Do NOT use any external knowledge or make assumptions beyond what's stated
+- Be thorough - synthesize information from multiple passages if relevant
+- Be concise but complete - include all relevant details from the context
+- Reference page numbers when citing specific information (e.g., "According to page 3...")
+- If multiple passages contain relevant information, combine them for a comprehensive answer
 
-Context:
+Context from the document:
 {context}
 
 Question: {question}
 
-Answer:"""
+Provide a well-structured answer:"""
         
         # Call OpenAI Chat Completion
         response = self.client.chat.completions.create(
