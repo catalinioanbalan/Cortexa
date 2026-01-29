@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils'
 import { User, Bot } from 'lucide-react'
+import { Citations } from './citations'
 import type { Message } from '@/types'
 
 interface ChatMessageProps {
@@ -34,10 +35,8 @@ export function ChatMessage({ message }: ChatMessageProps) {
           {message.content}
         </p>
 
-        {message.sourcePages && message.sourcePages.length > 0 && (
-          <p className="mt-2 text-xs opacity-70">
-            Sources: Page {message.sourcePages.join(', ')}
-          </p>
+        {message.citations && message.citations.length > 0 && (
+          <Citations citations={message.citations} />
         )}
       </div>
     </div>

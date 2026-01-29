@@ -5,11 +5,26 @@ from config import settings
 from services.embedding_service import embedding_service
 from services.vector_store_service import vector_store_service
 
+MAX_CITATION_LENGTH = 500
+
 
 class RAGService:
     def __init__(self):
         self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
         self.model = settings.CHAT_MODEL
+    
+    def _truncate_text(self, text: str, max_length: int = MAX_CITATION_LENGTH) -> str:
+        """Truncate text to max_length, adding ellipsis if needed."""
+        if len(text) <= max_length:
+            return text
+        return text[:max_length - 3].rsplit(' ', 1)[0] + "..."
+    
+    def _distance_to_confidence(self, distance: float) -> float:
+        """Convert cosine distance to confidence score (0-1)."""
+        # Cosine distance ranges from 0 (identical) to 2 (opposite)
+        # We use 1 - (distance / 2) to get similarity, then clamp
+        confidence = 1 - (distance / 2)
+        return round(max(0.0, min(1.0, confidence)), 2)
     
     def answer_question(self, question: str, doc_id: str) -> Dict[str, any]:
         """
@@ -22,7 +37,7 @@ class RAGService:
         Returns:
             Dict with:
             - answer: The AI-generated answer
-            - source_pages: List of page numbers used
+            - citations: List of citation objects with text, page, confidence, chunk_id
         """
         # Generate embedding for the question
         question_embedding = embedding_service.generate_embedding(question)
@@ -37,17 +52,27 @@ class RAGService:
         if not results["documents"]:
             return {
                 "answer": "No relevant information found in the document.",
-                "source_pages": []
+                "citations": []
             }
         
-        # Extract context and page numbers
-        context_chunks = results["documents"]
-        source_pages = [meta["page"] for meta in results["metadatas"]]
+        # Build citations with confidence scores
+        citations = []
+        for i, (doc, meta, distance) in enumerate(zip(
+            results["documents"],
+            results["metadatas"],
+            results["distances"]
+        )):
+            citations.append({
+                "text": self._truncate_text(doc),
+                "page": meta["page"],
+                "confidence": self._distance_to_confidence(distance),
+                "chunk_id": f"{doc_id}_chunk_{i}"
+            })
         
         # Build context string
         context = "\n\n".join([
             f"[Page {meta['page']}]\n{doc}"
-            for doc, meta in zip(context_chunks, results["metadatas"])
+            for doc, meta in zip(results["documents"], results["metadatas"])
         ])
         
         # Build prompt that forces strict context-based answers
@@ -81,7 +106,7 @@ Answer:"""
         
         return {
             "answer": answer,
-            "source_pages": sorted(list(set(source_pages)))
+            "citations": citations
         }
 
 

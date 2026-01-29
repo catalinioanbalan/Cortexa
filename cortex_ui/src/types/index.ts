@@ -14,9 +14,16 @@ export interface AskRequest {
   doc_id: string
 }
 
+export interface Citation {
+  text: string
+  page: number
+  confidence: number
+  chunk_id: string
+}
+
 export interface AskResponse {
   answer: string
-  source_pages: number[]
+  citations: Citation[]
 }
 
 export type Tone = 'insightful' | 'supportive' | 'analytical' | 'creative' | 'direct'
@@ -58,5 +65,5 @@ export interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
-  sourcePages?: number[]
+  citations?: Citation[]
 }

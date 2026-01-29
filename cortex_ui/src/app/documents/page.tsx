@@ -72,7 +72,7 @@ export default function DocumentsPage() {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         content: response.answer,
-        sourcePages: response.source_pages,
+        citations: response.citations,
       }
       setMessages((prev) => [...prev, assistantMessage])
     } catch (err) {

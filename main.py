@@ -36,9 +36,16 @@ class AskRequest(BaseModel):
     doc_id: str
 
 
+class Citation(BaseModel):
+    text: str
+    page: int
+    confidence: float
+    chunk_id: str
+
+
 class AskResponse(BaseModel):
     answer: str
-    source_pages: List[int]
+    citations: List[Citation]
 
 
 class InterpretRequest(BaseModel):
@@ -134,14 +141,14 @@ async def ask_question(request: AskRequest):
         request: AskRequest with question and doc_id
         
     Returns:
-        AskResponse with answer and source page numbers
+        AskResponse with answer and citations
     """
     try:
         result = rag_service.answer_question(request.question, request.doc_id)
         
         return AskResponse(
             answer=result["answer"],
-            source_pages=result["source_pages"]
+            citations=[Citation(**c) for c in result["citations"]]
         )
         
     except Exception as e:
