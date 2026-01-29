@@ -67,3 +67,40 @@ export interface Message {
   content: string
   citations?: Citation[]
 }
+
+// Chat Session types
+export interface ChatSession {
+  id: string
+  doc_id: string
+  title: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ChatMessage {
+  id: string
+  session_id: string
+  role: 'user' | 'assistant'
+  content: string
+  citations?: Citation[]
+  created_at: string
+}
+
+export interface ChatSessionWithMessages extends ChatSession {
+  messages: ChatMessage[]
+}
+
+export interface CreateSessionRequest {
+  doc_id: string
+  title?: string
+}
+
+export interface AddMessageRequest {
+  role: 'user' | 'assistant'
+  content: string
+  citations?: Citation[]
+}
+
+export interface AskRequestWithSession extends AskRequest {
+  session_id?: string
+}

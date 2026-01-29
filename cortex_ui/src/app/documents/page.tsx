@@ -7,8 +7,19 @@ import { FileUpload } from '@/components/file-upload'
 import { ChatMessage } from '@/components/chat-message'
 import { ChatInput } from '@/components/chat-input'
 import { DocumentCard } from '@/components/document-card'
-import { uploadDocument, askQuestion, listDocuments, deleteDocument } from '@/lib/api'
-import type { Document, Message } from '@/types'
+import { SessionList } from '@/components/session-list'
+import {
+  uploadDocument,
+  askQuestion,
+  listDocuments,
+  deleteDocument,
+  getSessions,
+  createSession,
+  getSession,
+  deleteSession,
+  exportSession,
+} from '@/lib/api'
+import type { Document, Message, ChatSession } from '@/types'
 
 export default function DocumentsPage() {
   const [documents, setDocuments] = useState<Document[]>([])
@@ -16,6 +27,11 @@ export default function DocumentsPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+
+  // Session state
+  const [sessions, setSessions] = useState<ChatSession[]>([])
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+  const [isLoadingSessions, setIsLoadingSessions] = useState(false)
 
   const fetchDocuments = useCallback(async () => {
     try {
@@ -34,9 +50,113 @@ export default function DocumentsPage() {
     }
   }, [])
 
+  // Fetch sessions for a document and auto-load the most recent one
+  const fetchSessions = useCallback(async (docId: string, autoLoadRecent = true) => {
+    try {
+      setIsLoadingSessions(true)
+      const docSessions = await getSessions(docId)
+      setSessions(docSessions)
+      
+      // Auto-load the most recent session if exists
+      if (autoLoadRecent && docSessions.length > 0) {
+        const mostRecent = docSessions[0] // Sessions are sorted by updated_at DESC
+        const sessionWithMessages = await getSession(mostRecent.id)
+        setCurrentSessionId(mostRecent.id)
+        setMessages(sessionWithMessages.messages.map(m => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          citations: m.citations,
+        })))
+      }
+    } catch (err) {
+      console.error('Failed to fetch sessions:', err)
+      setSessions([])
+    } finally {
+      setIsLoadingSessions(false)
+    }
+  }, [])
+
+  // Load session messages
+  const loadSession = useCallback(async (session: ChatSession) => {
+    try {
+      const sessionWithMessages = await getSession(session.id)
+      setCurrentSessionId(session.id)
+      setMessages(sessionWithMessages.messages.map(m => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        citations: m.citations,
+      })))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load session')
+    }
+  }, [])
+
+  // Create a new session
+  const handleCreateSession = useCallback(async () => {
+    if (!selectedDoc) return
+    try {
+      const session = await createSession({
+        doc_id: selectedDoc.id,
+        title: `Chat with ${selectedDoc.filename}`,
+      })
+      setSessions(prev => [session, ...prev])
+      setCurrentSessionId(session.id)
+      setMessages([])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create session')
+    }
+  }, [selectedDoc])
+
+  // Delete a session
+  const handleDeleteSession = useCallback(async (sessionId: string) => {
+    try {
+      await deleteSession(sessionId)
+      setSessions(prev => prev.filter(s => s.id !== sessionId))
+      if (currentSessionId === sessionId) {
+        setCurrentSessionId(null)
+        setMessages([])
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete session')
+    }
+  }, [currentSessionId])
+
+  // Export a session
+  const handleExportSession = useCallback(async (sessionId: string, format: 'md' | 'pdf') => {
+    try {
+      const blob = await exportSession(sessionId, format)
+      const session = sessions.find(s => s.id === sessionId)
+      const filename = `${session?.title || 'chat'}.${format}`
+      
+      // Create download link
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to export session')
+    }
+  }, [sessions])
+
   useEffect(() => {
     fetchDocuments()
   }, [fetchDocuments])
+
+  // Fetch sessions when document is selected
+  useEffect(() => {
+    if (selectedDoc) {
+      fetchSessions(selectedDoc.id)
+    } else {
+      setSessions([])
+      setCurrentSessionId(null)
+    }
+  }, [selectedDoc, fetchSessions])
 
   const handleUpload = useCallback(async (file: File) => {
     setError(null)
@@ -50,10 +170,29 @@ export default function DocumentsPage() {
     setDocuments((prev) => [...prev, newDoc])
     setSelectedDoc(newDoc)
     setMessages([])
+    setCurrentSessionId(null)
+    setSessions([])
   }, [])
 
   const handleAsk = useCallback(async (question: string) => {
     if (!selectedDoc) return
+
+    // Auto-create session if none exists
+    let sessionId = currentSessionId
+    if (!sessionId) {
+      try {
+        const session = await createSession({
+          doc_id: selectedDoc.id,
+          title: question.slice(0, 50) + (question.length > 50 ? '...' : ''),
+        })
+        sessionId = session.id
+        setCurrentSessionId(session.id)
+        setSessions(prev => [session, ...prev])
+      } catch (err) {
+        console.error('Failed to create session:', err)
+        // Continue without session persistence
+      }
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -66,6 +205,7 @@ export default function DocumentsPage() {
       const response = await askQuestion({
         question,
         doc_id: selectedDoc.id,
+        session_id: sessionId || undefined,
       })
 
       const assistantMessage: Message = {
@@ -78,7 +218,7 @@ export default function DocumentsPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to get answer')
     }
-  }, [selectedDoc])
+  }, [selectedDoc, currentSessionId])
 
   const handleDeleteDoc = useCallback(async (docId: string) => {
     try {
@@ -87,6 +227,8 @@ export default function DocumentsPage() {
       if (selectedDoc?.id === docId) {
         setSelectedDoc(null)
         setMessages([])
+        setSessions([])
+        setCurrentSessionId(null)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete document')
@@ -137,8 +279,10 @@ export default function DocumentsPage() {
                       document={doc}
                       isSelected={selectedDoc?.id === doc.id}
                       onSelect={() => {
-                        setSelectedDoc(doc)
-                        setMessages([])
+                        if (selectedDoc?.id !== doc.id) {
+                          setSelectedDoc(doc)
+                          // Don't clear messages here - fetchSessions will auto-load
+                        }
                       }}
                       onDelete={() => handleDeleteDoc(doc.id)}
                     />
@@ -146,6 +290,19 @@ export default function DocumentsPage() {
                 ))}
               </AnimatePresence>
             </div>
+          )}
+
+          {/* Session List */}
+          {selectedDoc && (
+            <SessionList
+              sessions={sessions}
+              selectedSessionId={currentSessionId}
+              onSelect={loadSession}
+              onDelete={handleDeleteSession}
+              onCreate={handleCreateSession}
+              onExport={handleExportSession}
+              isLoading={isLoadingSessions}
+            />
           )}
         </div>
 
@@ -158,17 +315,19 @@ export default function DocumentsPage() {
                   <p className="font-medium">{selectedDoc.filename}</p>
                   <p className="text-sm text-neutral-500">
                     {selectedDoc.chunks} chunks indexed
+                    {currentSessionId && ' • Session active'}
                   </p>
                 </div>
-                {messages.length > 0 && (
-                  <button
-                    onClick={() => setMessages([])}
+                <button
+                    onClick={() => {
+                      setMessages([])
+                      setCurrentSessionId(null)
+                    }}
                     className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-neutral-500 transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800"
                   >
                     <Trash2 className="h-4 w-4" />
-                    Clear Chat
+                    New Chat
                   </button>
-                )}
               </div>
 
               <div className="flex-1 space-y-4 overflow-y-auto p-4" style={{ minHeight: '400px' }}>
