@@ -149,54 +149,62 @@ class ChatService:
             return None
         
         pdf = FPDF()
-        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.set_margins(15, 15, 15)
+        pdf.set_auto_page_break(auto=True, margin=20)
         pdf.add_page()
         
+        # Calculate effective width
+        effective_width = pdf.w - pdf.l_margin - pdf.r_margin
+        
+        # Helper to safely encode text for PDF
+        def safe_text(text: str) -> str:
+            return text.encode('latin-1', 'replace').decode('latin-1')
+        
         # Title
-        pdf.set_font("Helvetica", "B", 16)
-        pdf.cell(0, 10, session["title"], ln=True)
+        pdf.set_font("Helvetica", "B", 14)
+        title = safe_text(session["title"][:100])  # Truncate very long titles
+        pdf.multi_cell(effective_width, 8, title)
+        pdf.ln(2)
         
         # Metadata
-        pdf.set_font("Helvetica", "I", 10)
-        pdf.cell(0, 6, f"Document ID: {session['doc_id']}", ln=True)
-        pdf.cell(0, 6, f"Created: {session['created_at']}", ln=True)
-        pdf.ln(5)
+        pdf.set_font("Helvetica", "I", 9)
+        pdf.cell(effective_width, 5, f"Document ID: {session['doc_id']}", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(effective_width, 5, f"Created: {session['created_at']}", new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(3)
         
         # Separator line
         pdf.set_draw_color(200, 200, 200)
-        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.line(pdf.l_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
         pdf.ln(5)
         
         for msg in session.get("messages", []):
             # Role header
             role_label = "User:" if msg["role"] == "user" else "Assistant:"
-            pdf.set_font("Helvetica", "B", 11)
-            pdf.cell(0, 8, role_label, ln=True)
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.cell(effective_width, 7, role_label, new_x="LMARGIN", new_y="NEXT")
             
             # Message content
-            pdf.set_font("Helvetica", "", 10)
-            # Handle encoding issues for PDF
-            content = msg["content"].encode('latin-1', 'replace').decode('latin-1')
-            pdf.multi_cell(0, 5, content)
-            pdf.ln(3)
+            pdf.set_font("Helvetica", "", 9)
+            content = safe_text(msg["content"])
+            pdf.multi_cell(effective_width, 5, content)
+            pdf.ln(2)
             
             # Citations
             citations = msg.get("citations", [])
             if citations:
-                pdf.set_font("Helvetica", "I", 9)
-                pdf.cell(0, 5, "Citations:", ln=True)
+                pdf.set_font("Helvetica", "I", 8)
+                pdf.cell(effective_width, 5, "Citations:", new_x="LMARGIN", new_y="NEXT")
                 for i, citation in enumerate(citations, 1):
                     page = citation.get("page", "N/A")
                     confidence = citation.get("confidence", 0)
-                    text = citation.get("text", "")[:100]
-                    text = text.encode('latin-1', 'replace').decode('latin-1')
-                    citation_text = f"  {i}. Page {page} ({confidence:.0%}): \"{text}...\""
-                    pdf.multi_cell(0, 4, citation_text)
+                    text = safe_text(citation.get("text", "")[:80])  # Shorter truncation
+                    citation_text = f"{i}. Page {page} ({confidence:.0%}): {text}..."
+                    pdf.multi_cell(effective_width, 4, citation_text)
                 pdf.ln(2)
             
             # Separator
             pdf.set_draw_color(220, 220, 220)
-            pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+            pdf.line(pdf.l_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
             pdf.ln(5)
         
         # Return as bytes
