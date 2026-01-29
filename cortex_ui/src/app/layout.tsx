@@ -4,8 +4,11 @@ import { LayoutWrapper } from "@/components/layout-wrapper"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "App",
-  description: "Description",
+  title: "Cortexa",
+  description: "AI-powered document analysis and chat",
+  icons: {
+    icon: "/favicon.svg",
+  },
 }
 
 export default function RootLayout({
