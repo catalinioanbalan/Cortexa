@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
 
@@ -11,6 +12,15 @@ from services.rag_service import rag_service
 from services.interpreter_service import interpreter_service
 
 app = FastAPI(title="Cortexa - Document Interpretation", version="1.0.0")
+
+# CORS middleware for frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:3003"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 ALLOWED_EXTENSIONS = {'.pdf', '.txt', '.md'}
 
@@ -42,6 +52,46 @@ class InterpretResponse(BaseModel):
     interpretation: str
     tone: str
     style: str
+
+
+class DocumentInfo(BaseModel):
+    doc_id: str
+    filename: str
+    chunks: int
+
+
+@app.get("/documents", response_model=List[DocumentInfo])
+async def list_documents():
+    """List all documents stored in the database."""
+    try:
+        docs = vector_store_service.get_all_documents()
+        result = []
+        for doc in docs:
+            filename = document_service.get_filename_by_doc_id(doc["doc_id"])
+            result.append(DocumentInfo(
+                doc_id=doc["doc_id"],
+                filename=filename or "Unknown",
+                chunks=doc["chunks"]
+            ))
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing documents: {str(e)}")
+
+
+@app.delete("/documents/{doc_id}")
+async def delete_document(doc_id: str):
+    """Delete a document from the database and filesystem."""
+    try:
+        if not vector_store_service.document_exists(doc_id):
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        vector_store_service.delete_document(doc_id)
+        document_service.delete_document_file(doc_id)
+        return {"status": "deleted", "doc_id": doc_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting document: {str(e)}")
 
 
 @app.post("/upload", response_model=UploadResponse)

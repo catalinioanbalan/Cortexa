@@ -65,5 +65,21 @@ class DocumentService:
         chunks = self.text_splitter.split_text(text)
         return [{"text": chunk, "page": 1} for chunk in chunks]
 
+    def get_filename_by_doc_id(self, doc_id: str) -> str | None:
+        """Get original filename from doc_id by searching uploads folder."""
+        for file_path in self.upload_dir.iterdir():
+            if file_path.name.startswith(f"{doc_id}_"):
+                # Extract original filename (remove doc_id prefix)
+                return file_path.name[len(doc_id) + 1:]
+        return None
+
+    def delete_document_file(self, doc_id: str) -> bool:
+        """Delete document file from uploads folder."""
+        for file_path in self.upload_dir.iterdir():
+            if file_path.name.startswith(f"{doc_id}_"):
+                file_path.unlink()
+                return True
+        return False
+
 
 document_service = DocumentService()

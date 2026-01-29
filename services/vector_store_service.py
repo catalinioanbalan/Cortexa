@@ -53,17 +53,6 @@ class VectorStoreService:
     ) -> Dict:
         """
         Query ChromaDB for relevant chunks filtered by doc_id.
-        
-        Args:
-            query_embedding: The query embedding vector
-            doc_id: The document UUID to filter by
-            top_k: Number of results to return
-            
-        Returns:
-            Dict containing:
-            - documents: List of matched text chunks
-            - metadatas: List of metadata dicts (with page numbers)
-            - distances: List of distance scores
         """
         results = self.collection.query(
             query_embeddings=[query_embedding],
@@ -76,6 +65,36 @@ class VectorStoreService:
             "metadatas": results["metadatas"][0] if results["metadatas"] else [],
             "distances": results["distances"][0] if results["distances"] else []
         }
+
+    def get_all_documents(self) -> List[Dict]:
+        """Get all unique documents with their chunk counts."""
+        results = self.collection.get(include=["metadatas"])
+        
+        if not results["metadatas"]:
+            return []
+        
+        # Group by doc_id and count chunks
+        doc_map: Dict[str, Dict] = {}
+        for meta in results["metadatas"]:
+            doc_id = meta.get("doc_id")
+            if doc_id:
+                if doc_id not in doc_map:
+                    doc_map[doc_id] = {"doc_id": doc_id, "chunks": 0}
+                doc_map[doc_id]["chunks"] += 1
+        
+        return list(doc_map.values())
+
+    def document_exists(self, doc_id: str) -> bool:
+        """Check if a document exists in the collection."""
+        results = self.collection.get(
+            where={"doc_id": doc_id},
+            limit=1
+        )
+        return len(results["ids"]) > 0
+
+    def delete_document(self, doc_id: str) -> None:
+        """Delete all chunks for a document."""
+        self.collection.delete(where={"doc_id": doc_id})
 
 
 vector_store_service = VectorStoreService()
